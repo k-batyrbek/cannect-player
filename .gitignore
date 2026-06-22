@@ -1,0 +1,7 @@
+node_modules/
+dist/
+out/
+.cache/
+videos-cache/
+*.log
+.env*
