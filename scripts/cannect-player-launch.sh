@@ -33,4 +33,7 @@ done
 
 APP="$HOME/Applications/cannect-player.AppImage"
 echo "[launch] старт плеера: $APP"
-exec "$APP"
+# --no-sandbox обязателен: chrome-sandbox в AppImage не может быть SUID-root,
+# без флага Electron падает (setuid_sandbox_host.cc). Банка крутит только наш
+# доверенный контент, sandbox тут не нужен.
+exec "$APP" --no-sandbox
