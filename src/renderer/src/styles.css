@@ -37,13 +37,15 @@ body {
   opacity: 1;
 }
 
-/* 16:9 — одно видео на весь экран. */
+/* 16:9 — одно видео на весь экран, без чёрных полей.
+   cover заполняет экран целиком (малейший излишек обрезается по краям);
+   contain давал бы леттербокс при любом расхождении соотношений. */
 .deck--landscape video {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   background: #000;
 }
 

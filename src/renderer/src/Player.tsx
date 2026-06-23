@@ -31,6 +31,10 @@ export function Player({ config, playlist }: PlayerProps): JSX.Element {
   const playingIndexRef = useRef(0)
   const isFirstRef = useRef(true)
   const startedAtRef = useRef<string>('')
+  // Отложенное перенаведение освободившегося дека (после кроссфейда). Чуть больше
+  // CSS-длительности перехода (.deck opacity 250ms), чтобы дек успел стать невидимым.
+  const FADE_MS = 300
+  const pendingRepoint = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const emitStart = useCallback(
     (entry: PlaylistEntry, isFirst: boolean) => {
@@ -70,11 +74,15 @@ export function Player({ config, playlist }: PlayerProps): JSX.Element {
 
   // Сброс движка при новом плейлисте — стартуем с индекса 0.
   useEffect(() => {
+    if (pendingRepoint.current) clearTimeout(pendingRepoint.current)
     playingIndexRef.current = 0
     isFirstRef.current = true
     activeRef.current = 0
     setSlotIndex([0, len > 1 ? 1 : 0])
     setActive(0)
+    return () => {
+      if (pendingRepoint.current) clearTimeout(pendingRepoint.current)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playlist])
 
@@ -85,18 +93,26 @@ export function Player({ config, playlist }: PlayerProps): JSX.Element {
 
     const nextIndex = (playingIndexRef.current + 1) % len
     const followingIndex = (nextIndex + 1) % len
-    const freed = activeRef.current // освободившийся дек — подгружает клип «через один»
+    const freed = activeRef.current // освободившийся дек — подгрузит клип «через один»
     const newActive: 0 | 1 = freed === 0 ? 1 : 0
 
-    setSlotIndex((slots) => {
-      const updated = [...slots] as [number, number]
-      updated[freed] = followingIndex
-      return updated
-    })
+    // Свап: прогретый дек выходит вперёд и играет (он уже стоит на 1-м кадре nextIndex).
     activeRef.current = newActive
     setActive(newActive)
     playingIndexRef.current = nextIndex
     isFirstRef.current = false
+
+    // Перенаведение освободившегося дека на followingIndex ОТКЛАДЫВАЕМ до конца
+    // кроссфейда. Иначе смена его src на миг показывает 1-й кадр чужого ролика
+    // поверх ещё затухающего дека — тот самый «всплеск» при каждом переходе.
+    if (pendingRepoint.current) clearTimeout(pendingRepoint.current)
+    pendingRepoint.current = setTimeout(() => {
+      setSlotIndex((slots) => {
+        const updated = [...slots] as [number, number]
+        updated[freed] = followingIndex
+        return updated
+      })
+    }, FADE_MS)
   }, [emitEnd, len, playable])
 
   // Старт клипа эмитим из деки в момент фактического play().
