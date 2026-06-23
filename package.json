@@ -1,6 +1,6 @@
 {
   "name": "cannect-player",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Нативный Linux (Electron) плеер для cannect LED-вендинг банок",
   "main": "./out/main/index.js",
   "author": "cannect",
