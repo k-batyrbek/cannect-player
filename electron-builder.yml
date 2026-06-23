@@ -1,0 +1,26 @@
+appId: kz.cannect.player
+productName: cannect-player
+
+# electron-vite собирает в out/ — пакуем оттуда.
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+# Linux: AppImage — единственный формат, который electron-updater умеет
+# автообновлять «из коробки». Качается с GitHub Releases публичного репо
+# БЕЗ токена на устройстве.
+linux:
+  target:
+    - AppImage
+  category: Video
+  artifactName: ${productName}-${version}.${ext}
+
+# Куда публиковать релизы (заливка идёт с Mac/CI; банки только качают).
+publish:
+  provider: github
+  owner: k-batyrbek
+  repo: cannect-player

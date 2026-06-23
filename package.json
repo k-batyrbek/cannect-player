@@ -11,7 +11,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "release": "electron-vite build && electron-builder --linux --publish always"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

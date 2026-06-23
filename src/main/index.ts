@@ -8,6 +8,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain, session } from 'electron'
 import { join } from 'path'
 import { getConfig, getRendererConfig } from './config'
 import { Orchestrator } from './orchestrator'
+import { setupAutoUpdate } from './updater'
 import { log } from './logger'
 import type { PlaybackEvent } from '@shared/types'
 
@@ -85,6 +86,8 @@ app.whenReady().then(async () => {
   win = createWindow()
   orchestrator = new Orchestrator(win)
   await orchestrator.start()
+
+  setupAutoUpdate()
 })
 
 app.on('will-quit', () => globalShortcut.unregisterAll())
