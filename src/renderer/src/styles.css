@@ -1,0 +1,79 @@
+/* Полноэкранный чёрный фон банки. Без скроллов, без курсора. */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
+
+body {
+  cursor: none;
+  user-select: none;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+
+/* Два дека наложены друг на друга; активный поверх, неактивный прогревается под ним. */
+.deck {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 250ms ease-in-out;
+}
+.deck.active {
+  opacity: 1;
+}
+
+/* 16:9 — одно видео на весь экран. */
+.deck--landscape video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+/* 9:16 — 4 вертикальные полосы с чёрными разделителями. */
+.deck--portrait {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: center;
+}
+.deck--portrait .strip {
+  flex: 1 1 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+.deck--portrait .strip video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Статусная заглушка (нет контента / прогрев). */
+.status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  font: 16px/1.4 system-ui, sans-serif;
+  background: #000;
+}

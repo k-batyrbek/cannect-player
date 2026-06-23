@@ -4,4 +4,9 @@ out/
 .cache/
 videos-cache/
 *.log
-.env*
+*.tsbuildinfo
+
+# Секреты станции — НЕ коммитим, но шаблон .env.example оставляем в репо.
+.env
+.env.*
+!.env.example
