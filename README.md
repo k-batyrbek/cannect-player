@@ -43,17 +43,20 @@ Electron 31 · electron-vite · React 18 · TypeScript · Node 20 LTS.
 src/
   main/            main-процесс (Node) — вся логика и сеть
     index.ts        окно kiosk + autoplay-флаг + IPC + хоткеи выхода + single-instance
-    config.ts       загрузка конфига из .env (+ безопасный срез для renderer)
+    config.ts       идентичность станции (env/etc/userData) + isProvisioned + persist
+    provisioning.ts мастер: запись .env камеры, детект /dev/video*, рестарт камеры
     api.ts          cannect-web: queue / report / current-playback
     camera.ts       локальная камера: POST /current-ad (fire-and-forget, X-Station-Token)
     cache.ts        кэш видео: скачать весь плейлист → file://, атомарно, + чистка
     billable.ts     учёт бонус-петель (billable=false сверх showsPerHour в часе)
     orchestrator.ts опрос queue + прогрев кэша + fan-out событий плейбэка
+    updater.ts      автообновление (electron-updater, публичные GitHub Releases)
     logger.ts
   preload/
     index.ts        мост window.cannect (contextBridge) — узкий типизированный API
   renderer/         React-плеер (показ)
-    App.tsx          подписка на плейлист/конфиг
+    App.tsx          гейтинг: мастер (если не настроена) либо плеер
+    Wizard.tsx       мастер первого запуска: идентичность + камеры
     Player.tsx       движок: двойная буферизация, зацикливание, эмиссия событий
     Deck.tsx         визуал клипа: 16:9 одно видео / 9:16 — 4 полосы + разделители
     styles.css
@@ -85,37 +88,37 @@ renderer через IPC. Renderer играет и на каждом старте
 
 ---
 
-## Конфигурация (.env)
+## Конфигурация станции
 
-Скопируй шаблон и заполни:
+Один и тот же AppImage работает на всех банках; уникальны только `STATION_ID` и
+`STATION_TOKEN`. У них **нет дефолтов** — пока их нет, станция считается
+ненастроенной. Три способа задать (приоритет: `process.env` → `/etc` → userData → `.env`):
 
+**1. Мастер первого запуска (основной способ на банке).**
+При первом старте без идентичности плеер показывает форму: вводишь `STATION_ID`,
+`STATION_TOKEN`, число камер (или «Пропустить»). Плеер сохраняет идентичность в
+`<userData>/station.env`, прописывает её же в `.env` камеры, перезапускает камеру
+и стартует показ. На новом ПК — никаких ручных файлов.
+
+**2. Скрипт (массовый/неинтерактивный провижининг).**
 ```bash
-cp .env.example .env
+sudo ./scripts/provision-station.sh <STATION_ID> <STATION_TOKEN>
+# пишет /etc/cannect-player/station.env
 ```
 
-`.env` в git **не коммитится** (содержит секрет). В репо лежит только
-`.env.example`. Все переменные:
-
-| Переменная | Обяз. | Дефолт | Что это и откуда взять |
-|---|---|---|---|
-| `STATION_ID` | да | `6a2699575a677a6355883ea2` | MongoDB ObjectId станции в cannect-web. **Должен совпадать со `STATION_ID` камеры.** Дефолт = ALM-002 · SmArt.Point. |
-| `STATION_TOKEN` | да | *(пусто)* | Общий секрет станции. **Тот же, что в `.env` камеры** (`stations.{_id}.edge.token` в Mongo). Нужен для авторизованного вызова камеры `/current-ad`. Пустой → вызовы без авторизации (камера примет только если у неё токен тоже пуст). |
-| `API_BASE` | — | `https://cannect.kz` | База cannect-web API (queue/report/current-playback). |
-| `CAMERA_BASE` | — | `http://127.0.0.1:8080` | Локальный edge-сервер камеры на этом же ПК. |
-| `POLL_INTERVAL_MS` | — | `60000` | Период опроса `/queue`, мс. Новый контент подхватывается на следующем опросе. |
-| `BUFFER_GATE_SEC` | — | `6` | За сколько секунд до конца текущего клипа следующий обязан быть прогрет в кэше. |
-| `STRIP_DIVIDER_PX` | — | `20` | Ширина чёрного разделителя между полосами в режиме 9:16, px. |
-| `CACHE_DIR` | — | `<userData>/videos-cache` | Каталог кэша видео. По умолчанию в профиле приложения. |
-| `AUDIO_DEVICE` | — | *(пусто)* | ID аудио-устройства вывода. Пусто = системное по умолчанию. |
-
-Минимальный рабочий `.env` для банки:
-
-```ini
-STATION_ID=6a2699575a677a6355883ea2
-STATION_TOKEN=<тот же токен, что в .env камеры>
-API_BASE=https://cannect.kz
-CAMERA_BASE=http://127.0.0.1:8080
+**3. Локальный `.env` (разработка).**
+```bash
+cp .env.example .env   # заполнить STATION_ID / STATION_TOKEN
 ```
+`.env` в git не коммитится; в репо только `.env.example`.
+
+> ⚠️ `STATION_ID` и `STATION_TOKEN` **обязаны совпадать** с `.env` камеры на этой
+> банке — иначе аналитика/плейбэк не сольются на сервере, а `/current-ad` вернёт 401.
+
+Остальные переменные имеют дефолты и общие для всех станций (`API_BASE`,
+`CAMERA_BASE`, `CAMERA_DIR`, `CAMERA_SERVICE`, `POLL_INTERVAL_MS`, `BUFFER_GATE_SEC`,
+`STRIP_DIVIDER_PX`, `CACHE_DIR`, `AUDIO_DEVICE`) — полный список и описание в
+`.env.example`.
 
 ---
 

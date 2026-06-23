@@ -60,24 +60,27 @@ cd cannect-player
 npm install
 ```
 
-### 4.3. Конфигурация станции (.env)
+### 4.3. Конфигурация станции
 
-```bash
-cp .env.example .env
-```
+Один AppImage на все банки; уникальны только `STATION_ID` + `STATION_TOKEN`
+(дефолтов нет — пусто = «не настроена»). Источники по приоритету:
+`process.env` → `/etc/cannect-player/station.env` → `<userData>/station.env` → `./.env`.
 
-Заполни `.env` (полная таблица переменных — в [README.md](./README.md)):
+**На банке — мастер первого запуска (основной способ).** При старте без
+идентичности плеер показывает форму (`Wizard.tsx`): `STATION_ID`, `STATION_TOKEN`,
+число камер / «Пропустить». Плеер сохраняет идентичность в `<userData>/station.env`,
+прописывает её же в `.env` камеры, перезапускает камеру и стартует показ.
+Ручных файлов на новом ПК не нужно.
 
-```ini
-STATION_ID=6a2699575a677a6355883ea2     # ObjectId станции в cannect-web
-STATION_TOKEN=<секрет станции>           # ОБЯЗАН совпадать с .env камеры на этом ПК
-API_BASE=https://cannect.kz
-CAMERA_BASE=http://127.0.0.1:8080
-```
+**Массово/неинтерактивно:** `sudo ./scripts/provision-station.sh <ID> <TOKEN>`
+(пишет `/etc/cannect-player/station.env`).
+
+**Разработка:** `cp .env.example .env` и заполнить. Полная таблица переменных — в
+[README.md](./README.md).
 
 > ⚠️ `STATION_ID` и `STATION_TOKEN` **обязаны совпадать** с `.env` модуля
 > cannect-camera на этой же банке — иначе аналитика и плейбэк не сольются на
-> сервере, а вызовы камеры вернут 401. `.env` в git не коммитится (секрет).
+> сервере, а вызовы камеры вернут 401.
 
 ### 4.4. Запуск
 
@@ -136,22 +139,29 @@ GH_TOKEN=<github token с правом на repo> npm run release
 src/
   main/             main-процесс (Node) — вся логика и сеть
     index.ts         окно kiosk + autoplay-флаг + IPC + хоткеи выхода + single-instance
-    config.ts        конфиг из .env (+ безопасный срез для renderer, без секретов)
+    config.ts        идентичность станции (env/etc/userData) + isProvisioned + persist
+    provisioning.ts  мастер: запись .env камеры, детект /dev/video*, рестарт камеры
     api.ts           cannect-web: queue / report / current-playback
     camera.ts        локальная камера: POST /current-ad (fire-and-forget, X-Station-Token)
     cache.ts         кэш видео: скачать весь плейлист → file://, атомарно, + чистка
     billable.ts      учёт бонус-петель (billable=false сверх showsPerHour в часе)
     orchestrator.ts  опрос queue → прогрев кэша → fan-out событий плейбэка
+    updater.ts       автообновление (electron-updater, публичные GitHub Releases)
     logger.ts
   preload/
     index.ts         мост window.cannect (contextBridge) — узкий типизированный API
   renderer/          React-плеер (показ)
-    App.tsx           подписка на плейлист/конфиг
+    App.tsx           гейтинг: мастер (если станция не настроена) либо плеер
+    Wizard.tsx        мастер первого запуска: идентичность + камеры
     Player.tsx        движок: двойная буферизация, зацикливание, эмиссия событий
     Deck.tsx          визуал клипа: 16:9 одно видео / 9:16 — 4 полосы + разделители
     styles.css
   shared/types.ts    общий контракт типов main ↔ renderer
 ```
+
+**Первый запуск:** если `isProvisioned()` ложно (нет STATION_ID/TOKEN) — main не
+стартует runtime, renderer показывает `Wizard`. По завершении мастера main пишет
+идентичность, (опц.) `.env` камеры + рестарт, и поднимает runtime (`startRuntime`).
 
 **Поток данных:** `orchestrator` (main) опрашивает `/queue`, греет кэш, шлёт
 плейлист в renderer через IPC. Renderer играет и на каждом старте/конце клипа шлёт
@@ -241,16 +251,21 @@ src/
 - Репозиторий **`github.com/k-batyrbek/cannect-player` — публичный**.
 - **Удалёнка: Tailscale** — банка в tailnet как `banka-alm-002` (см. §14), sshd поднят.
 - **Авто-апдейт: electron-updater + публичные GitHub Releases**, без токена на
-  банке (см. §4.5). Конфиг и логика готовы; нужен первый релиз `v0.1.0`.
+  банке (см. §4.5).
+- **Провижининг станции: мастер первого запуска** (см. §4.3) — на новом ПК env
+  руками не нужен.
 
 **Осталось (next steps):**
-1. **Опубликовать baseline-релиз `v0.1.0`** (`npm run release`) — без него банкам
-   нечего проверять.
-2. **systemd-юнит** автозапуска: стартовать **AppImage** (не dev!) в kiosk на загрузке.
-3. SSH на ключи + выключить парольный вход (сейчас вход по паролю).
-4. Доработки плеера: report для оборванного при смене плейлиста клипа; выбор
+1. **systemd-юнит автозапуска** (задача): стартовать **AppImage** (не dev!) в kiosk
+   на загрузке + `install.sh` (камера: systemd-юнит + NOPASSWD sudoers, чтобы
+   рестарт камеры из мастера работал; группа `video`; гашение экрана off).
+2. SSH на ключи + выключить парольный вход (сейчас вход по паролю).
+3. Доработки плеера: report для оборванного при смене плейлиста клипа; выбор
    аудио-устройства (флаг заложен, не доведён); current-playback `playback_ended`
    при остановке; gate автообновления на нерабочие часы (сейчас ставит сразу).
+
+> Перед релизом — смоук-тест упакованного AppImage: ESM/CJS-импорты (как
+> electron-updater) валятся только в упакованном виде, не в `npm run dev`.
 
 ## 11. Что НЕ трогаем
 
