@@ -2,7 +2,15 @@
 // Никаких node-API наружу — только узкий типизированный контракт.
 
 import { contextBridge, ipcRenderer } from 'electron'
-import type { CannectBridge, PlaybackEvent, PlaylistUpdate, RendererConfig } from '@shared/types'
+import type {
+  CannectBridge,
+  PlaybackEvent,
+  PlaylistUpdate,
+  ProvisioningStatus,
+  ProvisionInput,
+  ProvisionOutcome,
+  RendererConfig
+} from '@shared/types'
 
 const bridge: CannectBridge = {
   getConfig: (): Promise<RendererConfig> => ipcRenderer.invoke('config:get'),
@@ -15,7 +23,13 @@ const bridge: CannectBridge = {
 
   sendPlaybackEvent: (ev: PlaybackEvent): void => ipcRenderer.send('playback:event', ev),
 
-  log: (level, message): void => ipcRenderer.send('renderer:log', level, message)
+  log: (level, message): void => ipcRenderer.send('renderer:log', level, message),
+
+  getProvisioningStatus: (): Promise<ProvisioningStatus> =>
+    ipcRenderer.invoke('provisioning:status'),
+
+  provision: (input: ProvisionInput): Promise<ProvisionOutcome> =>
+    ipcRenderer.invoke('provisioning:provision', input)
 }
 
 contextBridge.exposeInMainWorld('cannect', bridge)

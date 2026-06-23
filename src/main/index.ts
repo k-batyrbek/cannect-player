@@ -6,11 +6,12 @@
 
 import { app, BrowserWindow, globalShortcut, ipcMain, session } from 'electron'
 import { join } from 'path'
-import { getConfig, getRendererConfig } from './config'
+import { getConfig, getRendererConfig, isProvisioned, persistIdentity } from './config'
 import { Orchestrator } from './orchestrator'
+import { cameraInstalled, detectCameras, restartCamera, writeCameraEnv } from './provisioning'
 import { setupAutoUpdate } from './updater'
 import { log } from './logger'
-import type { PlaybackEvent } from '@shared/types'
+import type { PlaybackEvent, ProvisionInput, ProvisionOutcome } from '@shared/types'
 
 // --- Флаги до готовности app ---------------------------------------------
 // Автоплей со звуком без жеста пользователя.
@@ -20,6 +21,17 @@ if (!app.requestSingleInstanceLock()) app.quit()
 
 let win: BrowserWindow | null = null
 let orchestrator: Orchestrator | null = null
+let runtimeStarted = false
+
+/** Запустить боевой рантайм (опрос/кэш/плейбэк + автообновление). Идемпотентно. */
+async function startRuntime(): Promise<void> {
+  if (runtimeStarted || !win) return
+  runtimeStarted = true
+  orchestrator = new Orchestrator(win)
+  await orchestrator.start()
+  setupAutoUpdate()
+  log('info', 'runtime запущен (станция настроена)')
+}
 
 function createWindow(): BrowserWindow {
   // PLAYER_WINDOWED=1 — оконный режим для разработки/смоук-теста (не захватывает экран).
@@ -64,14 +76,38 @@ function registerIpc(): void {
   ipcMain.on('renderer:log', (_e, level: 'info' | 'warn' | 'error', message: string) => {
     log(level, `[renderer] ${message}`)
   })
+
+  // --- Мастер первого запуска ---
+  ipcMain.handle('provisioning:status', () => ({
+    provisioned: isProvisioned(),
+    cameraInstalled: cameraInstalled(),
+    detectedCameras: detectCameras()
+  }))
+
+  ipcMain.handle('provisioning:provision', async (_e, input: ProvisionInput): Promise<ProvisionOutcome> => {
+    persistIdentity(input.stationId, input.stationToken)
+    log('info', `станция настроена через мастер: ${input.stationId}`)
+
+    let cameraEnv: ProvisionOutcome['cameraEnv']
+    let cameraRestart: ProvisionOutcome['cameraRestart']
+    if (cameraInstalled()) {
+      const res = writeCameraEnv({
+        stationId: input.stationId,
+        stationToken: input.stationToken,
+        cameraCount: input.cameraCount
+      })
+      cameraEnv = { ok: res.ok, reason: res.reason }
+      if (res.ok) cameraRestart = await restartCamera()
+    }
+
+    await startRuntime() // поднять плейбэк сразу после настройки
+    return { ok: true, cameraEnv, cameraRestart }
+  })
 }
 
 app.whenReady().then(async () => {
   const cfg = getConfig()
-  log('info', `cannect-player starting · station=${cfg.stationId}`)
-  if (!cfg.stationToken) {
-    log('warn', 'STATION_TOKEN пуст — вызовы камеры /current-ad будут без авторизации')
-  }
+  log('info', `cannect-player starting · station=${cfg.stationId || '(не настроена)'}`)
 
   // Опциональный выбор аудио-устройства вывода.
   if (cfg.audioDevice) {
@@ -84,10 +120,12 @@ app.whenReady().then(async () => {
 
   registerIpc()
   win = createWindow()
-  orchestrator = new Orchestrator(win)
-  await orchestrator.start()
 
-  setupAutoUpdate()
+  if (isProvisioned()) {
+    await startRuntime()
+  } else {
+    log('info', 'станция не настроена — renderer покажет мастер первого запуска')
+  }
 })
 
 app.on('will-quit', () => globalShortcut.unregisterAll())

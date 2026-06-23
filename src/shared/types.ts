@@ -68,12 +68,40 @@ export interface ClipEndEvent extends ClipRef {
 /** Внутреннее событие renderer → main. */
 export type PlaybackEvent = ClipStartEvent | ClipEndEvent
 
+/** Состояние провижининга станции (для мастера первого запуска). */
+export interface ProvisioningStatus {
+  /** Заданы ли STATION_ID и STATION_TOKEN. Если нет — показываем мастер. */
+  provisioned: boolean
+  /** Установлен ли на банке модуль cannect-camera. */
+  cameraInstalled: boolean
+  /** Индексы /dev/video* — подсказка по числу подключённых камер. */
+  detectedCameras: number[]
+}
+
+/** Ввод мастера первого запуска. */
+export interface ProvisionInput {
+  stationId: string
+  stationToken: string
+  /** Число камер; -1 = «Пропустить» (не трогать число камер у камеры). */
+  cameraCount: number
+}
+
+/** Результат провижининга. */
+export interface ProvisionOutcome {
+  ok: boolean
+  cameraEnv?: { ok: boolean; reason?: string }
+  cameraRestart?: { ok: boolean; reason?: string }
+}
+
 /** API, доступное в renderer через preload (window.cannect). */
 export interface CannectBridge {
   getConfig(): Promise<RendererConfig>
   onPlaylist(cb: (playlist: PlaylistUpdate) => void): () => void
   sendPlaybackEvent(ev: PlaybackEvent): void
   log(level: 'info' | 'warn' | 'error', message: string): void
+  // --- Мастер первого запуска ---
+  getProvisioningStatus(): Promise<ProvisioningStatus>
+  provision(input: ProvisionInput): Promise<ProvisionOutcome>
 }
 
 /** Безопасный для renderer срез конфига (без секретов). */

@@ -1,16 +1,32 @@
 import { useEffect, useState } from 'react'
-import type { PlaylistUpdate, RendererConfig } from '@shared/types'
+import type { PlaylistUpdate, ProvisioningStatus, RendererConfig } from '@shared/types'
 import { Player } from './Player'
+import { Wizard } from './Wizard'
 
 export function App(): JSX.Element {
+  const [status, setStatus] = useState<ProvisioningStatus | null>(null)
+  const [provisioned, setProvisioned] = useState(false)
   const [config, setConfig] = useState<RendererConfig | null>(null)
   const [playlist, setPlaylist] = useState<PlaylistUpdate | null>(null)
 
   useEffect(() => {
-    void window.cannect.getConfig().then(setConfig)
+    void window.cannect.getProvisioningStatus().then((s) => {
+      setStatus(s)
+      setProvisioned(s.provisioned)
+    })
     const off = window.cannect.onPlaylist(setPlaylist)
     return off
   }, [])
+
+  // Конфиг (со stationId) грузим только когда станция настроена.
+  useEffect(() => {
+    if (provisioned) void window.cannect.getConfig().then(setConfig)
+  }, [provisioned])
+
+  if (!status) return <div className="status">инициализация…</div>
+
+  // Станция не настроена → мастер первого запуска.
+  if (!provisioned) return <Wizard status={status} onDone={() => setProvisioned(true)} />
 
   if (!config) return <div className="status">инициализация…</div>
 
