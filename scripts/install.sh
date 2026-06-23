@@ -108,6 +108,15 @@ visudo -cf "/etc/sudoers.d/cannect-player" >/dev/null
 say "Группа video для $PLAYER_USER"
 usermod -aG video "$PLAYER_USER" || true
 
+# --- 6b. Быстрая загрузка GRUB (без 30с-меню после сбойного выключения) -------
+say "GRUB: не ждать после сбойной загрузки (recordfail timeout 0)"
+if grep -q "GRUB_RECORDFAIL_TIMEOUT" /etc/default/grub 2>/dev/null; then
+  sed -i "s/^.*GRUB_RECORDFAIL_TIMEOUT.*/GRUB_RECORDFAIL_TIMEOUT=0/" /etc/default/grub
+else
+  echo "GRUB_RECORDFAIL_TIMEOUT=0" >> /etc/default/grub
+fi
+update-grub 2>/dev/null || echo "⚠️  update-grub не выполнен (не GRUB-система?)"
+
 # --- 7. Автологин в графику (для запуска без рук при включении) ---------------
 if [[ "$AUTOLOGIN" -eq 1 ]]; then
   say "Автологин в графику для $PLAYER_USER (GDM)"
