@@ -7,7 +7,6 @@
 #   cannect-player (kiosk, ждёт камеру и стартует).
 #
 # Идемпотентно — можно перезапускать. Что настраивает:
-#   • системный сервис cv-analytics (камера), enable+start;
 #   • launcher плеера + автозапуск в графической сессии;
 #   • AppImage плеера в ~/Applications (записываемое место → автообновление работает);
 #   • NOPASSWD sudoers для рестарта камеры из плеера;
@@ -82,36 +81,18 @@ Terminal=false
 EOF
 chown "$PLAYER_USER:$PLAYER_USER" "$USER_HOME/.config/autostart/cannect-player.desktop"
 
-# --- 4. Системный сервис камеры (поднимается раньше графики) ------------------
-if [[ -d "$CAMERA_DIR" ]]; then
-  say "Сервис камеры: $CAMERA_SERVICE"
-  if [[ ! -x "$CAMERA_DIR/.venv/bin/python" ]]; then
-    echo "⚠️  venv камеры не найден ($CAMERA_DIR/.venv) — поставь зависимости камеры,"
-    echo "    сервис без них не стартует. Юнит всё равно установлю."
-  fi
-  # bash -lc + кавычки — путь камеры содержит пробел («Рабочий стол»).
-  cat > "/etc/systemd/system/$CAMERA_SERVICE.service" <<EOF
-[Unit]
-Description=cannect-camera CV analytics edge
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=$PLAYER_USER
-WorkingDirectory=$CAMERA_DIR
-ExecStart=/usr/bin/bash -lc 'exec "$CAMERA_DIR/.venv/bin/python" -m src.main'
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl daemon-reload
+# --- 4. Сервис камеры — ВЛАДЕЕТ репозиторий cannect-camera --------------------
+# Плеер НЕ создаёт юнит камеры: у камеры свой entrypoint (run.sh) и установка.
+# Здесь только убеждаемся, что сервис есть и включён в автозапуск (порядок boot:
+# камера → графика → плеер). Если юнита нет — его ставит установщик камеры.
+say "Проверка сервиса камеры: $CAMERA_SERVICE (юнит — за cannect-camera)"
+if systemctl list-unit-files "$CAMERA_SERVICE.service" --no-legend 2>/dev/null | grep -q "$CAMERA_SERVICE"; then
   systemctl enable "$CAMERA_SERVICE" >/dev/null 2>&1 || true
-  systemctl restart "$CAMERA_SERVICE" || echo "⚠️  камера не стартовала (см. journalctl -u $CAMERA_SERVICE)"
+  echo "Сервис $CAMERA_SERVICE найден и включён в автозапуск."
 else
-  echo "⚠️  Каталог камеры не найден ($CAMERA_DIR) — пропускаю сервис камеры."
+  echo "⚠️  Сервис $CAMERA_SERVICE НЕ установлен — его ставит установщик cannect-camera."
+  echo "    Без него камера не поднимется при загрузке. Плеер всё равно стартует:"
+  echo "    launcher подождёт :8080 до 30с и пойдёт играть (без CV-атрибуции)."
 fi
 
 # --- 5. NOPASSWD sudoers для рестарта камеры из плеера ------------------------

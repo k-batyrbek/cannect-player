@@ -136,9 +136,11 @@ GH_TOKEN=<github token с правом на repo> npm run release
 Разовая установка (под root): `sudo ./scripts/install.sh` (или `--no-autologin`).
 Порядок загрузки: **boot → камера → автологин в графику → плеер в kiosk**.
 
-- **Камера** — системный сервис `cv-analytics` (`/etc/systemd/system/`,
-  `User=cannect`, `WorkingDirectory`=каталог камеры, `Restart=always`), стартует на
-  `multi-user.target` (раньше графики).
+- **Камера** — системный сервис `cv-analytics` (стартует на `multi-user.target`,
+  раньше графики). **Юнит ставит и владеет им репозиторий cannect-camera** (свой
+  entrypoint `run.sh`), плеерный `install.sh` его НЕ создаёт — только проверяет
+  наличие и включает в автозапуск. (Запускать камеру руками `./run.sh` и под
+  systemd одновременно нельзя — будет конфликт за `:8080`.)
 - **Плеер** — автозапуск графической сессии: `~/.config/autostart/cannect-player.desktop`
   → `~/.local/bin/cannect-player-launch.sh`, который **ждёт камеру на `:8080`**, гасит
   скринсейвер и запускает AppImage в kiosk.
