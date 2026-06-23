@@ -93,6 +93,41 @@ npm run build:linux              # дистрибутив через electron-bu
 билде; в проде Esc отключён, чтобы случайный ввод не закрыл плеер).
 `PLAYER_WINDOWED=1` — оконный режим, не захватывает экран.
 
+### 4.5. Релизы и автообновление
+
+Автообновление через **electron-updater**. Релизы лежат на **GitHub Releases
+публичного репо** `k-batyrbek/cannect-player`, поэтому **на банке НЕ нужен токен** —
+устройство просто скачивает обновления. Заливка релизов идёт с Mac/CI.
+
+**Важно:** автообновление работает **только в упакованном AppImage**. `npm run dev`
+(запуск из исходников) НЕ обновляется. Значит на банке в проде должен крутиться
+**AppImage**, а не dev-режим (его стартует systemd — см. автозапуск).
+
+**Конфиг:** `electron-builder.yml` (target AppImage, publish → github
+k-batyrbek/cannect-player). Логика обновления: `src/main/updater.ts` —
+проверка на старте и каждые 6ч, авто-загрузка, установка сразу по загрузке
+(`quitAndInstall`; банка перезапустится за секунды, плейбэк возобновится из кэша).
+В dev — no-op (`app.isPackaged` false).
+
+**Как выпустить новую версию (с Linux-машины или CI):**
+```bash
+# 1) поднять версию в package.json (semver), закоммитить, запушить
+# 2) собрать и опубликовать релиз на GitHub:
+GH_TOKEN=<github token с правом на repo> npm run release
+```
+`npm run release` = `electron-vite build && electron-builder --linux --publish always`.
+Он создаёт GitHub Release с тегом `v<version>` и файлами `cannect-player-<version>.AppImage`
+и `latest-linux.yml` (метаданные, которые читает updater на банках).
+
+**Что происходит на банках:** каждые 6ч (и на старте) electron-updater читает
+`latest-linux.yml` из последнего релиза; если версия выше — качает AppImage,
+проверяет sha512 и перезапускает плеер на новой версии. Контента это не касается —
+он обновляется отдельно через `/queue`.
+
+> Токен нужен ТОЛЬКО для публикации (заливки) и живёт на Mac/CI, не на банке.
+> Для публикации хватает классического PAT со скоупом `repo` или fine-grained с
+> доступом к этому репо (Contents: RW). На устройства токен не попадает.
+
 ---
 
 ## 5. Архитектура кода
@@ -162,7 +197,8 @@ src/
 аналитику в Mongo камера шлёт сама (свой push-loop). Плеер CV-данные не relay'ит.
 
 - Эндпоинт: `POST http://127.0.0.1:8080/current-ad`, заголовок `X-Station-Token`.
-- Тело: `{ event, campaignId, videoId, startedAt, expectedDuration }`.
+- Тело: `{ event, campaignId, bookingId, videoId, startedAt, expectedDuration }`
+  (плеер шлёт `bookingId` для SMB — см. §8; камера принимает его по своему ТЗ).
 - **Fire-and-forget**, таймаут 2с: камера лежит/тормозит → плеер продолжает играть.
 - Плеер генерит ОДНО событие плейбэка и раскидывает его в два sink'а:
   `current-playback` (cannect-web) + `current-ad` (камера).
@@ -198,19 +234,23 @@ src/
 
 ## 10. Зафиксированные решения и что осталось
 
-**Решено:**
+**Решено и сделано:**
 - Electron + `<video>`, **mpv не берём** (железо мощное, не узкое место).
-- Интеграция с камерой — **вариант A** (плеер только шлёт current-ad).
-- Репозиторий: `github.com/k-batyrbek/cannect-player`.
+- Интеграция с камерой — **вариант A** (плеер только шлёт current-ad). Плеер уже
+  шлёт и `bookingId` (см. §8); правка камеры — по её ТЗ.
+- Репозиторий **`github.com/k-batyrbek/cannect-player` — публичный**.
+- **Удалёнка: Tailscale** — банка в tailnet как `banka-alm-002` (см. §14), sshd поднят.
+- **Авто-апдейт: electron-updater + публичные GitHub Releases**, без токена на
+  банке (см. §4.5). Конфиг и логика готовы; нужен первый релиз `v0.1.0`.
 
 **Осталось (next steps):**
-1. **systemd-юнит** автозапуска плеера + kiosk на загрузке банки.
-2. **Удалёнка:** Tailscale (рекомендация) vs Netbird — поставить на банки + Mac.
-3. **Авто-апдейт:** electron-updater с GitHub Releases (репо приватный/публичный —
-   уточнить; для приватного нужен токен на банке).
+1. **Опубликовать baseline-релиз `v0.1.0`** (`npm run release`) — без него банкам
+   нечего проверять.
+2. **systemd-юнит** автозапуска: стартовать **AppImage** (не dev!) в kiosk на загрузке.
+3. SSH на ключи + выключить парольный вход (сейчас вход по паролю).
 4. Доработки плеера: report для оборванного при смене плейлиста клипа; выбор
    аудио-устройства (флаг заложен, не доведён); current-playback `playback_ended`
-   при остановке.
+   при остановке; gate автообновления на нерабочие часы (сейчас ставит сразу).
 
 ## 11. Что НЕ трогаем
 
@@ -232,3 +272,21 @@ src/
 Логика плеера портирована из cannect-web `src/app/(vending)/vending/[id]/page.tsx`
 (4 полосы для 9:16, разделители, буфер-гейт, report, current-playback). 3D-превью
 банки НЕ нужно (это для дашборда-конфигуратора).
+
+## 14. Удалённый доступ (Tailscale)
+
+Банка за NAT на приватной LAN (`192.168.0.x`), белого IP нет → доступ через
+**Tailscale** (mesh-VPN на WireGuard).
+
+- Узел в tailnet: hostname **`banka-alm-002`**, tailnet-IP **`100.103.234.17`**,
+  MagicDNS `banka-alm-002.tail5b9b07.ts.net`. Аккаунт tailnet — `k-batyrbek`.
+- Поднято: `tailscale up --ssh --hostname=banka-alm-002`; `tailscaled` в автозапуске.
+- SSH: `openssh-server` стоит, sshd на порту 22. Заход: `ssh cannect@100.103.234.17`
+  (или по имени узла). Сейчас вход по паролю — для прода перейти на ключи и
+  выключить `PasswordAuthentication`.
+- На dev-Mac: поставить Tailscale, залогиниться в тот же аккаунт `k-batyrbek`.
+- Tailscale SSH (`--ssh`) требует `ssh`-правило в ACL tailnet; обычный SSH поверх
+  tailnet-IP работает в любом случае.
+
+Развернуть Tailscale на новой банке: `curl -fsSL https://tailscale.com/install.sh | sh`
+затем `sudo tailscale up --ssh --hostname=banka-<код-станции>`.
