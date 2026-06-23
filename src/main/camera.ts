@@ -19,6 +19,8 @@ const TIMEOUT_MS = 2_000
 export interface CurrentAdPayload {
   event: PlaybackEventType
   campaignId?: string
+  /** SMB-брони идут с bookingId (без campaignId). Камера ключует показ по тому, что не null. */
+  bookingId?: string
   videoId: string
   startedAt: string
   expectedDuration: number

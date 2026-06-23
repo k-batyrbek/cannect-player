@@ -113,6 +113,7 @@ export class Orchestrator {
         notifyCamera({
           event,
           campaignId: ev.campaignId,
+          bookingId: ev.bookingId,
           videoId: ev.videoId,
           startedAt: ev.startedAt,
           expectedDuration: ev.expectedDuration
