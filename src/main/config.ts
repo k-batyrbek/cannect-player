@@ -84,7 +84,7 @@ export function getConfig(): AppConfig {
     stationToken: env('STATION_TOKEN', ''),
     apiBase: env('API_BASE', 'https://cannect.kz'),
     cameraBase: env('CAMERA_BASE', 'http://127.0.0.1:8080'),
-    cameraDir: env('CAMERA_DIR', join(app.getPath('home'), 'Рабочий стол', 'cannect-camera')),
+    cameraDir: env('CAMERA_DIR', '/opt/cannect/cv-analytics'), // прод-расположение камеры (systemd)
     cameraService: env('CAMERA_SERVICE', 'cv-analytics'),
     cacheDir: env('CACHE_DIR', join(app.getPath('userData'), 'videos-cache')),
     pollIntervalMs: envInt('POLL_INTERVAL_MS', 60_000),
