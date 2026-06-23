@@ -1,15 +1,27 @@
-// Конфигурация плеера. Грузится из переменных окружения / .env,
-// с разумными дефолтами для станции ALM-002.
+// Конфигурация плеера.
+//
+// Идентичность станции (STATION_ID / STATION_TOKEN) ХРАНИТСЯ СНАРУЖИ приложения,
+// чтобы один и тот же AppImage работал на всех банках, а провижининг сводился к
+// записи одного файла. Порядок источников (выигрывает тот, что задан раньше —
+// dotenv не перетирает уже выставленные переменные):
+//   1. process.env             — то, что инжектит systemd (EnvironmentFile) или шелл;
+//   2. /etc/cannect-player/station.env  — прод-конфиг банки (см. провижининг);
+//   3. ./.env                  — локальная разработка.
 //
 // Секреты (STATION_TOKEN) НЕ должны попадать в renderer — отдаём наружу
 // только безопасный срез (getRendererConfig).
 
 import { app } from 'electron'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { config as loadDotenv } from 'dotenv'
 import type { RendererConfig } from '@shared/types'
 
-loadDotenv()
+/** Прод-файл идентичности станции. Задаётся при провижининге, переживает авто-апдейт. */
+export const STATION_ENV_PATH = '/etc/cannect-player/station.env'
+
+if (existsSync(STATION_ENV_PATH)) loadDotenv({ path: STATION_ENV_PATH })
+loadDotenv() // локальный .env (dev) — не перетирает уже загруженное
 
 function env(key: string, fallback: string): string {
   const v = process.env[key]
