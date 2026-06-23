@@ -7,8 +7,12 @@
 // Работает только в упакованном билде (AppImage). В dev — no-op.
 
 import { app } from 'electron'
-import { autoUpdater } from 'electron-updater'
+// electron-updater — CommonJS-модуль: именованный импорт не работает в ESM-сборке,
+// берём autoUpdater из default-экспорта.
+import electronUpdater from 'electron-updater'
 import { log } from './logger'
+
+const { autoUpdater } = electronUpdater
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000 // каждые 6 часов
 
