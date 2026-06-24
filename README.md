@@ -143,7 +143,22 @@ npm run build:linux              # дистрибутив через electron-bu
 
 ---
 
-## Автозапуск на банке (TODO)
+## Автозапуск на банке
 
-Планируется systemd-юнит + kiosk на загрузке + Tailscale для удалённого SSH +
-electron-updater для авто-обновлений. См. «Следующие шаги» в CLAUDE.md.
+Готово через `scripts/install.sh` (разово, под root). Порядок загрузки:
+**boot → камера (systemd) → автологин → плеер в kiosk**. Подробности, нюансы
+(`--no-sandbox`, GRUB recordfail, звук, sudoers) и полный план развёртывания
+новой банки — в [CLAUDE.md](./CLAUDE.md) §4 и §4.6.
+
+Коротко, развёртывание новой банки:
+```bash
+# 1) поставить cannect-camera (clone + venv + её systemd-юнит cv-analytics)
+# 2) плеер:
+git clone https://github.com/k-batyrbek/cannect-player.git && cd cannect-player
+sudo ./scripts/install.sh           # автозапуск, автологин, sudoers, GRUB, video
+# 3) идентичность станции: мастер первого запуска ИЛИ
+sudo ./scripts/provision-station.sh <STATION_ID> <STATION_TOKEN>
+sudo reboot                          # проверить холодный старт
+```
+
+Удалёнка (Tailscale) и автообновление (electron-updater) — см. CLAUDE.md §14 и §4.5.

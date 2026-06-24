@@ -143,7 +143,10 @@ GH_TOKEN=<github token с правом на repo> npm run release
   systemd одновременно нельзя — будет конфликт за `:8080`.)
 - **Плеер** — автозапуск графической сессии: `~/.config/autostart/cannect-player.desktop`
   → `~/.local/bin/cannect-player-launch.sh`, который **ждёт камеру на `:8080`**, гасит
-  скринсейвер и запускает AppImage в kiosk.
+  блокировку экрана/простой/сон (`gsettings` + `xset`) и запускает AppImage в kiosk
+  с **`--no-sandbox`**. ⚠️ Флаг обязателен: chrome-sandbox в AppImage не может быть
+  SUID-root → без него Electron падает (`setuid_sandbox_host.cc`) и автозапуск молча
+  не работает (камера и автологин при этом исправны — обманчиво).
 - **AppImage** — в `~/Applications/cannect-player.AppImage` (записываемо юзером →
   автообновление может перезаписать на месте).
 - **sudoers** `/etc/sudoers.d/cannect-player` — `cannect` может
@@ -151,7 +154,11 @@ GH_TOKEN=<github token с правом на repo> npm run release
   перезапускают камеру).
 - **Автологин** — GDM `custom.conf` (`AutomaticLogin=cannect`), чтобы сессия
   поднималась без рук при включении.
+- **GRUB** — `GRUB_RECORDFAIL_TIMEOUT=0` + `update-grub`: после неаккуратного
+  выключения Ubuntu иначе показывает меню с 30-сек ожиданием; для банки грузим сразу.
 - Юзер в группе `video` (доступ к камерам), `libfuse2` для запуска AppImage.
+- Звук: PipeWire сам шлёт на аналоговый выход (зелёный 3.5мм line-out); громкость и
+  выбор выхода запоминаются (wireplumber). HDMI-аудио (видеокарта) не использовать.
 
 Полный цикл провижининга новой банки: поставить camera + venv, `install.sh`, затем
 идентичность (мастер первого запуска или `provision-station.sh`), `reboot`.
