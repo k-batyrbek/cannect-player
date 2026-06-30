@@ -40,18 +40,20 @@ if [[ -z "$STATION_ID" || -z "$STATION_TOKEN" ]]; then
 fi
 
 mkdir -p "$CONF_DIR"
-umask 077
 cat > "$CONF_FILE" <<EOF
 # cannect-player — идентичность станции. Сгенерировано provision-station.sh.
 # Должно совпадать с .env модуля cannect-camera на этой банке.
 STATION_ID=$STATION_ID
 STATION_TOKEN=$STATION_TOKEN
 EOF
-chmod 600 "$CONF_FILE"
+# 644: плеер работает под пользователем (не root) и должен ПРОЧИТАТЬ файл —
+# при 600 root-only плеер не видит идентичность и показывает мастер. Банка
+# однопользовательская (kiosk), так что мировое чтение токена приемлемо.
+chmod 644 "$CONF_FILE"
 
 echo "✅ Записано $CONF_FILE"
 echo "   STATION_ID=$STATION_ID"
-echo "   STATION_TOKEN=*** (скрыт, права 600)"
+echo "   STATION_TOKEN=*** (скрыт)"
 echo
 echo "Плеер подхватит это при следующем запуске. Прочие настройки (API_BASE,"
 echo "CAMERA_BASE и т.д.) общие для всех станций — дефолты зашиты в приложении."
